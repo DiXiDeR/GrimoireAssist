@@ -21,30 +21,23 @@ class BookmarkManager:
             raise ValueError("Missing required environment variables")
 
     def extract_domains_from_csv(self, file_path):
-        """Extract unique domains from CSV file with email addresses"""
+        """Extract unique domains from CSV file with domains addresses"""
         domains = set()
 
         try:
             with open(file_path, "r", encoding="utf-8") as csvfile:
                 reader = csv.DictReader(csvfile)
-                if "emails" not in reader.fieldnames:
-                    raise ValueError("CSV must contain 'emails' column header")
-
-                for row in reader:
-                    email = row["emails"].strip().lower()
-                    if "@" in email:
-                        domain = email.split("@")[-1]
-                        domains.add(domain)
-
+                if "domains" not in reader.fieldnames:
+                    raise ValueError("CSV must contain 'domains' column header")
             return list(domains)
 
         except FileNotFoundError:
             print(f"Error: CSV file not found at {file_path}")
             return []
 
-    def fetch_metadata(self, domain):
+    def fetch_metadata(self, domains):
         """Fetch metadata for a domain"""
-        url = f"https://{domain}"
+        url = f"{domains}"
 
         try:
             response = requests.post(
@@ -57,7 +50,7 @@ class BookmarkManager:
             return response.json()["metadata"]
 
         except requests.exceptions.RequestException as e:
-            print(f"Error fetching metadata for {domain}: {str(e)}")
+            print(f"Error fetching metadata for {domains}: {str(e)}")
             return None
 
     def add_bookmark(self, metadata):

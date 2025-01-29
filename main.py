@@ -2,6 +2,7 @@ import os
 import csv
 import requests
 from dotenv import load_dotenv
+from urllib.parse import urlparse
 
 # Load environment variables
 load_dotenv()
@@ -14,31 +15,45 @@ class BookmarkManager:
         self.default_image = os.getenv(
             "DEFAULT_IMAGE", "http://192.168.31.62:5173/files/1/default.png"
         )
-        self.processed_domains = set()
+        self.processed_urls = set()
 
         # Validate required environment variables
         if not all([self.base_url, self.auth_cookie]):
             raise ValueError("Missing required environment variables")
 
-    def extract_domains_from_csv(self, file_path):
-        """Extract unique domains from CSV file with domains addresses"""
-        domains = set()
+    def extract_urls_from_csv(self, file_path):
+        """Extract unique URLs from CSV file"""
+        urls = set()
 
         try:
             with open(file_path, "r", encoding="utf-8") as csvfile:
                 reader = csv.DictReader(csvfile)
                 if "domains" not in reader.fieldnames:
                     raise ValueError("CSV must contain 'domains' column header")
-            return list(domains)
+
+                for row in reader:
+                    url = row["domains"].strip()
+                    if self._is_valid_url(url):
+                        urls.add(url)
+                    else:
+                        print(f"Skipping invalid URL: {url}")
+
+            return list(urls)
 
         except FileNotFoundError:
             print(f"Error: CSV file not found at {file_path}")
             return []
 
-    def fetch_metadata(self, domains):
-        """Fetch metadata for a domain"""
-        url = f"{domains}"
+    def _is_valid_url(self, url):
+        """Validate URL format"""
+        try:
+            result = urlparse(url)
+            return all([result.scheme, result.netloc])
+        except ValueError:
+            return False
 
+    def fetch_metadata(self, url):
+        """Fetch metadata for a URL"""
         try:
             response = requests.post(
                 f"{self.base_url}/api/fetch-metadata",
@@ -50,7 +65,7 @@ class BookmarkManager:
             return response.json()["metadata"]
 
         except requests.exceptions.RequestException as e:
-            print(f"Error fetching metadata for {domains}: {str(e)}")
+            print(f"Error fetching metadata for {url}: {str(e)}")
             return None
 
     def add_bookmark(self, metadata):
@@ -112,29 +127,28 @@ class BookmarkManager:
 
     def process_csv(self, file_path):
         """Main processing method for CSV file"""
-        domains = self.extract_domains_from_csv(file_path)
+        urls = self.extract_urls_from_csv(file_path)
 
-        for domain in domains:
-            if domain in self.processed_domains:
+        for url in urls:
+            if url in self.processed_urls:
+                print(f"Skipping duplicate URL: {url}")
                 continue
 
-            print(f"Processing domain: {domain}")
-            metadata = self.fetch_metadata(domain)
+            print(f"Processing URL: {url}")
+            metadata = self.fetch_metadata(url)
 
             if metadata and self.add_bookmark(metadata):
-                self.processed_domains.add(domain)
-                print(f"Successfully added: {domain}")
+                self.processed_urls.add(url)
+                print(f"Successfully added: {url}")
             else:
-                print(f"Failed to process: {domain}")
+                print(f"Failed to process: {url}")
 
 
 if __name__ == "__main__":
     try:
         manager = BookmarkManager()
         manager.process_csv("input.csv")
-        print(
-            f"Processing complete. Total domains added: {len(manager.processed_domains)}"
-        )
+        print(f"Processing complete. Total URLs added: {len(manager.processed_urls)}")
 
     except Exception as e:
         print(f"Fatal error: {str(e)}")
